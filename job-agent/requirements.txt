@@ -1,0 +1,25 @@
+playwright>=1.40.0
+playwright-stealth>=2.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.0.0
+pyyaml>=6.0.1
+rich>=13.7.0
+typer>=0.9.0
+google-genai>=0.1.0
+google-auth>=2.20.0
+requests>=2.31.0
+openai>=1.10.0
+httpx>=0.26.0
+python-dotenv>=1.0.0
+beautifulsoup4>=4.12.0
+lxml>=5.1.0
+pypdf>=4.0.0
+setuptools>=68.0.0
+
+# Desktop shell. pywebview drives the OS webview (WebKit on macOS, Edge
+# WebView2 on Windows) rather than bundling a second Chromium alongside the one
+# Playwright already ships, which keeps the installer roughly 100MB smaller.
+pywebview>=5.0
+# Licence key custody: Keychain on macOS, Credential Manager on Windows.
+keyring>=25.0.0
+

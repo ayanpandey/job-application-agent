@@ -1,0 +1,245 @@
+# ==============================================================================
+# LinkedIn & Naukri Job Agent -- shipped defaults.
+#
+# This file is bundled into the binary and is only ever the FIRST-RUN SEED. The
+# onboarding wizard writes the customer's own copy to their application-data
+# directory (see src/core/paths.py: app_config_path) and that copy always wins.
+#
+# So nothing here may describe a particular person or a particular field of
+# work. The search keywords, locations, match threshold, daily limit and
+# experience years below are placeholders that onboarding overwrites; the
+# pacing, pre-filter and rhythm settings are product tuning and apply to
+# everyone. An earlier version of this file was one candidate's live config,
+# job titles and salary floor included, compiled into every customer's binary.
+# ==============================================================================
+
+general:
+  # When dry_run is true, the agent fills all form fields and stops at the final submit step
+  dry_run: true
+  # When human_in_the_loop is true, the agent pauses for a y/n before every submit.
+  # Off: a live run submits on its own. Pass --interactive (-i) to turn it back on
+  # for a single run without editing this file. Note that with it off, the
+  # form solver's needs_human refusal is what keeps a guessed screening answer
+  # from being submitted: those jobs are recorded FAILED for manual review.
+  human_in_the_loop: false
+  database_path: "./data/jobs.db"
+  tailor_resumes: true
+
+search:
+  # Placeholders. Onboarding replaces both lists with what the customer enters,
+  # so this is only what a build looks like before anyone has set it up.
+  keywords: []
+
+  locations:
+    - "Remote"
+    - "India"
+
+  # Filters
+  easy_apply_only: true
+  date_posted: "past-week"
+  experience_levels:
+    - "entry_level"
+    - "associate"
+    - "mid_senior"
+  
+  # Minimum LLM match score (0-100) required to proceed with application
+  min_match_score: 25
+  # Cards scanned per search. Higher than before because most of them no longer
+  # cost an LLM call -- see matching.max_llm_evaluations_per_search.
+  max_results_per_search: 30
+  # Work the keyword x location grid in a different order each day. A session
+  # only gets through part of it, so a fixed order meant the last keywords in
+  # the list were never searched at all.
+  rotate_search_grid: true
+  interleave_locations: true
+  # LinkedIn serves 25 results per page and mounts them lazily as the results
+  # column is scrolled. Discovery now scrolls the column until the list stops
+  # growing and then pages through with the `start` offset.
+  max_pages_per_search: 3
+  # When a search surfaces fewer than widen_below_results listings, repeat it
+  # with the filters relaxed -- recency first, then seniority -- rather than
+  # recording "no jobs found". Most empty searches are the filters intersecting
+  # to nothing, not an empty market.
+  widen_when_thin: true
+  widen_below_results: 8
+
+  # What to do with jobs that are not LinkedIn Easy Apply:
+  #   off      - ignore them (default)
+  #   discover - score and store them so recruiter outreach can reach them, but
+  #              never open the company's portal
+  #   apply    - also complete the application on the company's own ATS
+  #
+  # Under "apply" the agent works ten named vendors (Greenhouse, Lever, Ashby,
+  # SmartRecruiters, Workable, Recruitee, BambooHR, JazzHR, Personio, Zoho) and
+  # any other site carrying a form it is confident is a job application --
+  # including those same vendors embedded in a company's own careers page,
+  # which is the integration most companies actually use.
+  #
+  # It stops without submitting, and marks the job for you to finish by hand,
+  # whenever: a captcha or anti-bot interstitial appears, the portal wants an
+  # account first, a required question has no answer in your profile, or the
+  # portal does not confirm it received the application. Workday, Taleo, iCIMS,
+  # SuccessFactors and Oracle Recruiting are never opened at all -- each needs a
+  # registered account per employer, so an automated attempt leaves an abandoned
+  # half-built profile rather than an application.
+  #
+  # Try "discover" before "apply", and "apply" with dry_run before going live.
+  external_apply: "off"
+
+  # Extra job titles derived once from the candidate's profile and the keywords
+  # above, then written back to this file so they can be read and pruned. The
+  # seed keywords are always searched first; these only get whatever time is
+  # left. Set keyword_expansion to false to switch it off entirely.
+  keyword_expansion: true
+  max_expanded_keywords: 8
+  expanded_keywords: []
+  expanded_from: ""
+
+# ==============================================================================
+# Deterministic pre-screen. Runs before any LLM call: title relevance, skill
+# overlap and the experience band, all from local text. Obvious mismatches cost
+# nothing, obvious fits cost nothing, and the model only sees what is actually
+# in question. See src/llm/prefilter.py.
+# ==============================================================================
+matching:
+  prefilter_enabled: true
+  # Deterministic score below which a listing is rejected without a model call.
+  # Lower = wider funnel, more model calls.
+  prefilter_reject_below: 18
+  # ...and above which it is accepted without one. High on purpose: this skips
+  # the only component that reads the description for meaning.
+  fast_track_above: 88
+
+  # Years-of-experience tolerance. A posting asking for 3 years is treated as
+  # open to 2.4-3.6; one asking for 3-5 is treated as open to 2.4-6.0.
+  experience_tolerance: 0.20
+  # How far below the relaxed floor is still worth a model opinion instead of an
+  # immediate reject. In years. Postings routinely ask for more years than the
+  # work actually needs, so this grace window is what keeps those reachable,
+  # while a genuine "10+ years" staff role is still cut for free.
+  max_years_shortfall: 2.5
+
+  # Substring-matched against the job title / company name.
+  exclude_title_keywords:
+    - "intern"
+    - "internship"
+    - "recruiter"
+  exclude_companies: []
+
+  # Model calls per search. Cards are still scanned up to
+  # max_results_per_search; anything past this budget is saved as DISCOVERED
+  # and scored on a later run rather than skipped.
+  max_llm_evaluations_per_search: 12
+  # Share of the final score that comes from the deterministic pass. Keeps the
+  # min_match_score threshold meaning the same thing run to run.
+  prefilter_blend: 0.25
+  # Evaluations and screening answers are cached in the same SQLite file.
+  cache_enabled: true
+  cache_days: 14
+
+# ==============================================================================
+# Pacing of the discretionary pauses only. This does NOT touch the anti-
+# detection layer: mouse kinematics, typing dynamics, session rhythm, breaks,
+# active hours and daily volume are all unchanged and are what actually carry
+# account risk. action_pace scales the "look unhurried" waits between form
+# steps and fields, and code-level floors stop it producing burst timing.
+# ==============================================================================
+speed:
+  action_pace: 0.55
+  # A posting worth applying to gets read. One the pre-filter already rejected
+  # gets skimmed -- which is what a person does with an obviously wrong search
+  # result, and was previously costing 4-10 seconds each.
+  read_seconds_match: [4.0, 9.0]
+  read_seconds_skim: [1.2, 2.8]
+  # Resolve every unanswered question on a form step in one request.
+  batch_form_questions: true
+  # Score the posting while reading it, rather than after.
+  overlap_evaluation_with_reading: true
+
+limits:
+  max_applications_per_day: 25
+  max_outreach_messages_per_day: 15
+  min_delay_between_actions_seconds: 3.5
+  max_delay_between_actions_seconds: 8.0
+
+browser:
+  headless: false
+  user_data_dir: "./data/browser_profile"
+  # Keep this at 0. slow_mo delays every Playwright operation, including each
+  # individual mouse.move() inside a trajectory: at 120 the pointer reports every
+  # 134ms +/- 1.7ms instead of 13.8ms +/- 2.9ms, which is a metronome and undoes the
+  # whole human-movement engine. Pacing is handled in code that varies it.
+  slow_mo: 0
+  timeout_ms: 30000
+
+# Session-level pacing. This layer matters more than per-action realism: what
+# distinguishes a real job seeker from an agent over weeks is when they work, for how
+# long, and how much the daily count varies -- not how a single click moves.
+rhythm:
+  enabled: true
+  # Only act between these local hours. Applications at 03:40 are a flag on their own.
+  active_hours_start: 8
+  active_hours_end: 23
+  # One working session lasts this long, then the agent stops for the day.
+  session_minutes_min: 25
+  session_minutes_max: 70
+  long_break_minutes_min: 6
+  long_break_minutes_max: 22
+  # Short steps away between clusters of work.
+  actions_between_micro_breaks_min: 4
+  actions_between_micro_breaks_max: 11
+  micro_break_seconds_min: 35
+  micro_break_seconds_max: 180
+  # Odds of glancing at another window between two jobs (fires a real blur/focus pair).
+  glance_away_probability: 0.22
+  glance_away_seconds_min: 12
+  glance_away_seconds_max: 95
+  # Daily volume is the configured limit scaled by +/- this fraction, drawn from a
+  # date-seeded RNG so a restart cannot roll a fresh, larger quota.
+  daily_quota_jitter: 0.35
+  # Fraction of days with no activity at all. Acting every single day without
+  # exception is the most legible pattern this system can emit.
+  rest_day_probability: 0.10
+
+llm:
+  # "proxy" is what every shipped build runs: prompts and Google credentials
+  # live on the licence server, and this machine holds neither. This file is
+  # bundled into the binary as the first-run default, so it must not name a
+  # direct provider -- it used to say "gemini", which on a customer machine
+  # finds no credentials and silently disables the AI entirely.
+  # Use "gemini" only for local development, with GOOGLE_APPLICATION_CREDENTIALS
+  # set, or pass LLM_PROVIDER=gemini for a single run.
+  provider: "proxy"
+  model: "gemini-3.7-flash"
+  temperature: 0.2
+  max_tokens: 1500
+
+outreach:
+  auto_send_connection: false
+  max_note_length: 200
+  # Field-neutral: these are hiring roles that exist in every industry. Naming
+  # one discipline's job titles here would point an auditor's outreach at
+  # machine-learning directors.
+  target_recruiter_titles:
+    - "Recruiter"
+    - "Technical Recruiter"
+    - "Talent Acquisition"
+    - "Talent Acquisition Specialist"
+    - "Hiring Manager"
+    - "Head of Talent"
+    - "HR Manager"
+
+# ==============================================================================
+# Naukri.com Platform Configuration
+# ==============================================================================
+naukri:
+  enabled: true
+  user_data_dir: "./data/naukri_browser_profile"
+  # As with search.* above: placeholders that onboarding replaces with the
+  # customer's own titles, locations and experience.
+  keywords: []
+  locations:
+    - "Remote"
+  experience_years: 0
+  min_match_score: 25
+  max_applications_per_day: 30

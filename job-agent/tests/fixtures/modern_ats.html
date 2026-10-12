@@ -1,0 +1,135 @@
+<!doctype html><html><body>
+<!--
+  A current-generation ATS form. Nothing here is a native control except the
+  text inputs and the file uploads: the dropdown is a react-select clone, the
+  yes/no is an ARIA radiogroup over divs, the consent is an ARIA checkbox, and
+  the cover letter is a contenteditable. This is what Greenhouse's own UI, Ashby
+  and Workable actually emit today, and the pre-widget reader saw none of it.
+-->
+<main>
+<h1>Apply for Staff Engineer</h1>
+<form id="app">
+  <label for="name">Full name *</label>
+  <!-- No type attribute: legal, means text, and the old selector missed it. -->
+  <input id="name" name="name" required>
+
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required>
+
+  <label for="phone">Phone</label>
+  <input type="tel" id="phone" name="phone">
+
+  <label for="resume">Resume / CV *</label>
+  <input type="file" id="resume" name="resume">
+
+  <label for="cover_upload">Cover letter (optional)</label>
+  <input type="file" id="cover_upload" name="cover_letter">
+
+  <!-- Typeahead: accepts free text but discards anything not committed. -->
+  <label for="loc">Current location *</label>
+  <input id="loc" name="location" role="combobox" aria-autocomplete="list"
+         aria-controls="loc-list" required autocomplete="off">
+  <ul id="loc-list" role="listbox" hidden></ul>
+
+  <!-- react-select clone: a div, a portalled menu, a hidden input. -->
+  <label id="notice-label">What is your notice period? *</label>
+  <div class="select__control" role="combobox" aria-labelledby="notice-label"
+       aria-haspopup="listbox" aria-required="true" tabindex="0">Select...</div>
+  <input type="hidden" id="notice-value" name="notice">
+
+  <!-- ARIA radiogroup: no <input type=radio> anywhere. -->
+  <div role="radiogroup" aria-label="Are you legally authorized to work in India?"
+       aria-required="true">
+    <div role="radio" aria-checked="false" tabindex="0">Yes</div>
+    <div role="radio" aria-checked="false" tabindex="0">No</div>
+  </div>
+
+  <!-- ARIA checkbox. Sized, because a real one is: an empty unstyled div has
+       no bounding box and is correctly invisible to a :visible sweep. -->
+  <div role="checkbox" aria-checked="false" aria-required="true" tabindex="0"
+       style="width:16px;height:16px;border:1px solid #333;display:inline-block"
+       aria-label="I agree to the candidate privacy notice"></div>
+
+  <!-- Rich-text cover letter. -->
+  <div class="field">
+    <label>Why do you want this role?</label>
+    <div contenteditable="true" id="why" aria-label="Why do you want this role?"></div>
+  </div>
+
+  <button type="submit">Submit application</button>
+</form>
+</main>
+
+<script>
+// Minimal but faithful: the menu is portalled to <body>, the value lives in a
+// hidden input, and the control's own text is what a reader sees.
+const OPTIONS = ['Immediately', '15 days', '30 days', '60 days', '90 days'];
+const control = document.querySelector('.select__control');
+let menu = null;
+
+control.addEventListener('mousedown', () => {
+  if (menu) { menu.remove(); menu = null; return; }
+  menu = document.createElement('div');
+  menu.className = 'select__menu';
+  menu.setAttribute('role', 'listbox');
+  menu.style.cssText = 'position:absolute;background:#fff;border:1px solid #ccc;z-index:9';
+  OPTIONS.forEach(text => {
+    const opt = document.createElement('div');
+    opt.className = 'select__option';
+    opt.setAttribute('role', 'option');
+    opt.textContent = text;
+    opt.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      control.textContent = text;
+      document.getElementById('notice-value').value = text;
+      menu.remove(); menu = null;
+    });
+    menu.appendChild(opt);
+  });
+  document.body.appendChild(menu);
+});
+
+// Typeahead: suggestions appear as you type, and the input is cleared on blur
+// unless one was committed -- which is the behaviour that silently empties a
+// field the agent believes it answered.
+const loc = document.getElementById('loc');
+const list = document.getElementById('loc-list');
+const PLACES = ['Bengaluru, Karnataka, India', 'Mumbai, Maharashtra, India',
+                'Delhi, India', 'Remote'];
+let committed = false;
+
+loc.addEventListener('input', () => {
+  committed = false;
+  const q = loc.value.toLowerCase();
+  list.innerHTML = '';
+  const hits = q ? PLACES.filter(p => p.toLowerCase().includes(q)) : [];
+  hits.forEach(p => {
+    const li = document.createElement('li');
+    li.setAttribute('role', 'option');
+    li.textContent = p;
+    li.addEventListener('mousedown', e => {
+      e.preventDefault();
+      loc.value = p; committed = true; list.hidden = true;
+    });
+    list.appendChild(li);
+  });
+  list.hidden = hits.length === 0;
+});
+loc.addEventListener('blur', () => {
+  setTimeout(() => { if (!committed) loc.value = ''; list.hidden = true; }, 120);
+});
+
+document.querySelectorAll('[role=radio]').forEach(r => {
+  r.addEventListener('click', () => {
+    r.parentElement.querySelectorAll('[role=radio]')
+      .forEach(o => o.setAttribute('aria-checked', 'false'));
+    r.setAttribute('aria-checked', 'true');
+  });
+});
+const box = document.querySelector('[role=checkbox]');
+box.addEventListener('click', () => {
+  box.setAttribute('aria-checked',
+    box.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+});
+</script>
+</body></html>

@@ -1,0 +1,42 @@
+<!doctype html><html><body>
+<!--
+  An entirely ordinary application form that happens to carry invisible
+  reCAPTCHA v3 -- which is what Greenhouse and Lever both ship by default.
+
+  Nothing is ever asked of the user. There is a sitekey on the form, an anchor
+  iframe, and the little badge in the corner, and the applicant simply fills the
+  form and submits. If this is read as a challenge, the agent refuses to apply
+  to the two most widely used ATSs in the world.
+
+  The badge is deliberately given its real dimensions (256x60) so it is
+  genuinely visible: a size test alone does not separate it from a challenge
+  widget, which is why the badge is excluded by class name.
+-->
+<form id="application_form" data-sitekey="6Lc_aXkUAAAAABcdefGhIjKlMnOpQrStUvWxYz01">
+  <label for="first_name">First Name *</label>
+  <input type="text" id="first_name" name="first_name" required>
+
+  <label for="last_name">Last Name *</label>
+  <input type="text" id="last_name" name="last_name" required>
+
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required>
+
+  <label for="resume">Resume/CV *</label>
+  <input type="file" id="resume" name="resume">
+
+  <label for="q_notice">Notice period in days *</label>
+  <input type="number" id="q_notice" name="q_notice" required>
+
+  <button type="submit">Submit application</button>
+</form>
+
+<!-- The v3 badge: visible, real size, and not a challenge. -->
+<div class="grecaptcha-badge" style="width:256px;height:60px;position:fixed;bottom:14px;right:14px">
+  <div class="grecaptcha-logo">
+    <iframe title="reCAPTCHA"
+      src="https://www.google.com/recaptcha/api2/anchor?k=6Lc_aXkU&size=invisible"
+      style="width:256px;height:60px;border:0"></iframe>
+  </div>
+</div>
+</body></html>

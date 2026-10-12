@@ -1,0 +1,93 @@
+# ==============================================================================
+# Example candidate profile. Everything here is fictional.
+#
+# Copy to config/profile.yaml and replace with your own details:
+#
+#     cp config/profile.example.yaml config/profile.yaml
+#
+# profile.yaml is gitignored -- it is a real person's CV and must never be
+# committed. The desktop app's onboarding wizard writes this file for you (and
+# can fill it from your PDF resume); editing it by hand is only needed when
+# running from source with the CLI.
+# ==============================================================================
+
+personal_info:
+  first_name: "Jane"
+  last_name: "Doe"
+  email: "jane.doe@example.com"
+  phone_country_code: "+1"
+  phone_number: "5555550100"
+  city: "Austin"
+  state: "Texas"
+  country: "United States"
+  postal_code: "78701"
+  linkedin_url: "https://www.linkedin.com/in/janedoe-example"
+  github_url: "https://github.com/janedoe-example"
+  portfolio_url: ""
+
+# Your master resume. Tailored copies are generated from it per job and never
+# overwrite it.
+resume_path: "./resumes/resume.pdf"
+
+professional_summary: >
+  Backend engineer with five years of experience building data-intensive
+  services in Python and Go. Comfortable owning a system from design through
+  on-call.
+
+skills:
+  languages: ["Python", "Go", "SQL"]
+  frameworks_and_libraries: ["FastAPI", "PyTorch", "Pandas"]
+  cloud_and_devops: ["AWS", "Docker", "Kubernetes", "Terraform"]
+  databases: ["PostgreSQL", "Redis"]
+
+experience:
+  - role: "Senior Software Engineer"
+    company: "Acme Analytics"
+    location: "Austin, TX"
+    start_date: "2023-02"
+    end_date: "Present"
+    highlights:
+      - "Cut p95 latency of the ingestion API from 900 ms to 210 ms by moving validation off the request path."
+      - "Led the migration of 40 batch jobs from cron to an event-driven pipeline."
+  - role: "Software Engineer"
+    company: "Initech"
+    location: "Remote"
+    start_date: "2020-07"
+    end_date: "2023-01"
+    highlights:
+      - "Built the internal feature store used by three product teams."
+
+education:
+  - degree: "B.S. Computer Science"
+    institution: "Example State University"
+    graduation_year: 2020
+
+# Facts the form solver may state on your behalf. It answers screening questions
+# from these and refuses (leaving the job for manual review) when a question
+# needs something that is not here -- it does not guess.
+screening_answers:
+  total_years_experience: 5
+  years_experience_by_skill:
+    python: 5
+    go: 3
+    sql: 5
+  work_authorization:
+    citizenship: "United States"
+    legally_authorized_in_us: true
+    requires_sponsorship_now_or_future: false
+  preferences:
+    notice_period_days: 14
+    notice_period_weeks: 2
+    desired_salary_usd: 150000
+    willing_to_relocate: false
+    willing_to_commute_hybrid: true
+    can_work_remotely: true
+  demographics:
+    gender: "Decline to self-identify"
+    veteran_status: "I am not a protected veteran"
+    disability_status: "I do not wish to answer"
+
+outreach:
+  elevator_pitch: >
+    Backend engineer focused on data-heavy Python and Go services; I enjoy
+    making slow systems fast.

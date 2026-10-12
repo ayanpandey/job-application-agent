@@ -1,0 +1,48 @@
+<!doctype html><html><body>
+<form id="application_form">
+  <label for="first_name">First Name *</label>
+  <input type="text" id="first_name" name="first_name" required>
+
+  <label for="last_name">Last Name *</label>
+  <input type="text" id="last_name" name="last_name" required>
+
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required>
+
+  <label for="phone">Phone</label>
+  <input type="tel" id="phone" name="phone">
+
+  <label for="resume">Resume *</label>
+  <input type="file" id="resume" name="resume">
+
+  <label for="q_years">How many years of SOX compliance experience do you have? *</label>
+  <input type="number" id="q_years" name="q_years" required>
+
+  <label for="q_auth">Are you legally authorized to work in India? *</label>
+  <select id="q_auth" name="q_auth" required>
+    <option value="">Select an option</option>
+    <option>Yes</option>
+    <option>No</option>
+  </select>
+
+  <fieldset>
+    <legend>Will you now or in the future require sponsorship?</legend>
+    <label><input type="radio" name="q_sponsor" value="yes">Yes</label>
+    <label><input type="radio" name="q_sponsor" value="no">No</label>
+  </fieldset>
+
+  <label for="gender">Gender</label>
+  <select id="gender" name="gender">
+    <option value="">Select an option</option>
+    <option>Male</option><option>Female</option><option>Prefer not to say</option>
+  </select>
+
+  <label><input type="checkbox" id="consent" name="consent" required> I agree to the privacy policy</label>
+
+  <!-- Already filled: must be left alone -->
+  <label for="prefilled">Current company</label>
+  <input type="text" id="prefilled" name="prefilled" value="EY">
+
+  <button type="submit">Submit Application</button>
+</form>
+</body></html>

@@ -1,0 +1,46 @@
+# Credentials. Nothing here is ever committed -- build.py refuses to build while
+# any of it is present in the tree, and the Windows workflow fails the job if it
+# finds one in a checkout.
+config/service_account.json
+**/config/service_account.json
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+**/.env
+!**/.env.example
+
+# Per-install state and a real person's data
+**/config/profile.yaml
+**/config/.licence
+**/config/.device
+**/config/prompts.yaml
+**/telemetry-spool.jsonl
+
+# Build output and environments
+dist/
+build/
+venv/
+**/venv/
+__pycache__/
+*.py[cod]
+**/src/core/build_info.py
+
+# Runtime data: SQLite, browser profiles, generated resumes, logs
+**/data/
+**/logs/
+
+# Master resumes are a real person's CV -- name, phone, address, employment
+# history. build.py does not bundle them (they are adopted from the user's own
+# file at onboarding), so nothing needs them in the repo.
+**/resumes/
+
+# Local analysis output
+graphify-out/
+**/graphify-out/
+
+# Archives
+*.zip
+
+.DS_Store

@@ -1,0 +1,26 @@
+<!doctype html><html><body>
+<!--
+  The other side of the same line: a challenge the applicant must actually
+  answer before the form can be used.
+
+  The discriminator against invisible_recaptcha.html is not "is reCAPTCHA
+  present" -- it is present in both -- but whether there is a widget on screen
+  with real dimensions that is not the corner badge.
+-->
+<h1>Apply for Staff Engineer</h1>
+<p>Please verify that you're human to continue.</p>
+
+<form id="application_form">
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required>
+
+  <label for="resume">Resume *</label>
+  <input type="file" id="resume" name="resume">
+
+  <!-- The explicitly rendered checkbox widget: 304x78 in the wild. -->
+  <div class="g-recaptcha" data-sitekey="6Lc_aXkUAAAAABcdefGhIjKlMnOpQrStUvWxYz01"
+       style="width:304px;height:78px;border:1px solid #d3d3d3"></div>
+
+  <button type="submit">Submit application</button>
+</form>
+</body></html>

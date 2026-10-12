@@ -1,0 +1,64 @@
+<!doctype html><html><body>
+<!--
+  A page that records exactly what a detection script would see.
+
+  Everything a site can cheaply observe about an interaction ends up in
+  window.__trace: the trust flag, the modifier state, the timestamps that give
+  dwell and flight times, and the pointer path. The assertions live in
+  tests/test_interaction_trace.py, which drives this page with the real
+  human_behavior functions rather than a reimplementation of them -- the point
+  is to test the shipped code path, not a model of it.
+-->
+<form id="app">
+  <label for="name">Full name</label>
+  <input type="text" id="name" name="name">
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes"></textarea>
+
+  <label for="resume">Resume</label>
+  <input type="file" id="resume" name="resume" style="display:none">
+  <button type="button" id="attach">Attach a file</button>
+
+  <button type="button" id="go">Continue</button>
+</form>
+
+<script>
+window.__trace = [];
+
+const push = (type, e, extra) => {
+  window.__trace.push(Object.assign({
+    type,
+    t: performance.now(),
+    trusted: e.isTrusted,
+    target: (e.target && (e.target.id || e.target.tagName)) || '',
+  }, extra || {}));
+};
+
+['keydown', 'keyup'].forEach(type =>
+  document.addEventListener(type, e => push(type, e, {
+    key: e.key,
+    shift: e.shiftKey,
+    // A repeat flag on a key the page never saw held is its own anomaly.
+    repeat: e.repeat,
+  }), true));
+
+['pointerdown', 'pointerup', 'click'].forEach(type =>
+  document.addEventListener(type, e => push(type, e, {
+    x: e.clientX, y: e.clientY, buttons: e.buttons,
+  }), true));
+
+// Pointer movement is sampled, not summarised: the inter-sample interval and
+// the step size are the two things a trajectory model actually scores.
+document.addEventListener('pointermove', e => push('pointermove', e, {
+  x: e.clientX, y: e.clientY,
+}), true);
+
+['change', 'input', 'focus', 'blur'].forEach(type =>
+  document.addEventListener(type, e => push(type, e), true));
+
+document.getElementById('attach').addEventListener('click', () => {
+  document.getElementById('resume').click();
+});
+</script>
+</body></html>

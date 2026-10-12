@@ -1,0 +1,55 @@
+<!doctype html><html><body>
+<!--
+  A company's own careers page with the ATS embedded in an iframe. The top-level
+  URL is the company's, so URL-based vendor detection sees nothing at all -- and
+  the form itself is in a frame the old page-scoped reader never looked at.
+  Greenhouse, Lever, SmartRecruiters and Workable all ship an embed like this,
+  and plenty of companies prefer it so the page keeps their own branding.
+
+  Also carries a newsletter signup and a site search, which are precisely the
+  two things a naive "find the inputs" sweep mistakes for an application form.
+-->
+<header>
+  <nav><a href="/">Acme</a> <a href="/careers">Careers</a></nav>
+  <form id="site-search" role="search">
+    <input type="text" name="q" placeholder="Search the site">
+    <button type="submit">Search</button>
+  </form>
+</header>
+
+<main>
+  <h1>Staff Engineer</h1>
+  <p>We are hiring. Apply below.</p>
+
+  <div id="grnhse_app">
+    <iframe id="grnhse_iframe" title="Greenhouse Job Board"
+      srcdoc="
+      <!doctype html><html><body>
+      <form id='application_form'>
+        <label for='first_name'>First Name *</label>
+        <input type='text' id='first_name' name='first_name' required>
+        <label for='last_name'>Last Name *</label>
+        <input type='text' id='last_name' name='last_name' required>
+        <label for='email'>Email *</label>
+        <input type='email' id='email' name='email' required>
+        <label for='phone'>Phone</label>
+        <input type='tel' id='phone' name='phone'>
+        <label for='resume'>Resume/CV *</label>
+        <input type='file' id='resume' name='resume'>
+        <label for='q_notice'>What is your notice period in days? *</label>
+        <input type='number' id='q_notice' name='q_notice' required>
+        <button type='submit'>Submit application</button>
+      </form>
+      </body></html>">
+    </iframe>
+  </div>
+</main>
+
+<footer>
+  <form id="newsletter">
+    <label for="nl">Subscribe to our newsletter</label>
+    <input type="email" id="nl" name="nl">
+    <button type="submit">Subscribe</button>
+  </form>
+</footer>
+</body></html>

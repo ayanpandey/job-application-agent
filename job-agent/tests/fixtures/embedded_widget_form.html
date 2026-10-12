@@ -1,0 +1,72 @@
+<!doctype html><html><body>
+<!--
+  The hardest realistic case, and the one that caught three separate bugs.
+
+  A react-select-style dropdown, inside an embedded board, whose popup is
+  portalled to the frame's own <body> and which does NOT close on Escape.
+
+  Three things had to be right for this to work at all, and none of them were:
+
+    1. The option must be resolved from the *control's own document*. A Page
+       locator searches the main frame only, so the click that commits the
+       answer found nothing and every dropdown on every embedded board was
+       reported as a refused question.
+    2. Reading the options must not leave the popup open. It opens the dropdown
+       to enumerate the choices for the solver and presses Escape to close it --
+       and when a widget ignores Escape, as this one does, the popup stayed up.
+    3. The click that answers the question must not toggle. With the popup still
+       open from step 2, clicking the control to "open" it closed it instead.
+
+  The `ignores Escape` behaviour is deliberate. Plenty of widgets do honour it,
+  and those work either way; this is the variant that fails silently.
+-->
+<h1>Careers at Acme</h1>
+<div id="grnhse_app">
+  <iframe id="grnhse_iframe" title="Greenhouse Job Board" width="900" height="800"
+    srcdoc="
+    <!doctype html><html><body>
+    <form id='application_form'>
+      <label for='first_name'>First Name *</label>
+      <input type='text' id='first_name' name='first_name' required>
+      <label for='email'>Email *</label>
+      <input type='email' id='email' name='email' required>
+      <label for='resume'>Resume/CV *</label>
+      <input type='file' id='resume' name='resume'>
+      <label id='notice-label'>What is your notice period? *</label>
+      <div class='select__control' role='combobox' aria-labelledby='notice-label'
+           aria-required='true' tabindex='0'>Select...</div>
+      <input type='hidden' id='notice-value' name='notice'>
+      <button type='submit'>Submit application</button>
+    </form>
+    <script>
+    const OPTS = ['Immediately', '30 days', '60 days', '90 days'];
+    const control = document.querySelector('.select__control');
+    let menu = null;
+    const close = () => { if (menu) { menu.remove(); menu = null; } };
+    control.addEventListener('mousedown', () => {
+      if (menu) { close(); return; }
+      menu = document.createElement('div');
+      menu.className = 'select__menu';
+      menu.setAttribute('role', 'listbox');
+      menu.style.cssText = 'position:absolute;background:#fff;border:1px solid #ccc;z-index:9';
+      OPTS.forEach(text => {
+        const opt = document.createElement('div');
+        opt.className = 'select__option';
+        opt.setAttribute('role', 'option');
+        opt.textContent = text;
+        opt.addEventListener('mousedown', e => {
+          e.stopPropagation();
+          control.textContent = text;
+          document.getElementById('notice-value').value = text;
+          close();
+        });
+        menu.appendChild(opt);
+      });
+      document.body.appendChild(menu);
+    });
+    // No Escape handler, on purpose.
+    </script>
+    </body></html>">
+  </iframe>
+</div>
+</body></html>

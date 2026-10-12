@@ -1,0 +1,19 @@
+<!doctype html><html><body>
+<form>
+  <!-- Lever style: labels wrap the input, no for= anywhere -->
+  <label>Full name*<input type="text" name="name" required></label>
+  <label>Email*<input type="text" name="email" required></label>
+  <label>Phone<input type="text" name="phone"></label>
+  <input type="file" name="resume">
+
+  <!-- Loose radio group: shares a name, no fieldset -->
+  <div class="application-question">
+    <label>Are you currently based in India?</label>
+    <label><input type="radio" name="based_india" value="Yes">Yes</label>
+    <label><input type="radio" name="based_india" value="No">No</label>
+  </div>
+
+  <textarea name="why_this_role" aria-label="Why are you interested in this role?"></textarea>
+  <button>Submit</button>
+</form>
+</body></html>

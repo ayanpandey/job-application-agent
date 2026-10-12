@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Agent</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ===== Icon set =========================================================
+     One stroke weight, one cap style, drawn as schematic symbols rather than
+     emoji so they inherit ink colour and sit on the same optical baseline.
+     ==================================================================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- brand: a dial with its needle -- the tolerance gauge in miniature -->
+    <symbol id="i-mark" viewBox="0 0 16 16">
+      <path d="M2.5 12a5.5 5.5 0 0 1 11 0"/><path d="M8 12l3-4.6"/>
+    </symbol>
+    <symbol id="i-wave" viewBox="0 0 16 16">
+      <path d="M1.5 8h2.8l2-4.5L9.7 12l1.8-4h3"/>
+    </symbol>
+    <symbol id="i-table" viewBox="0 0 16 16">
+      <rect x="2" y="3" width="12" height="10"/><path d="M2 6.4h12M6.2 6.4V13"/>
+    </symbol>
+    <symbol id="i-doc" viewBox="0 0 16 16">
+      <path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/>
+    </symbol>
+    <symbol id="i-cloud" viewBox="0 0 16 16">
+      <path d="M4.6 12.6a2.9 2.9 0 0 1 .3-5.8 4 4 0 0 1 7.5 1.1 2.4 2.4 0 0 1-.4 4.7"/>
+      <path d="M8 13.5V7.4M6 9.4L8 7.4l2 2"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 16 16">
+      <path d="M2.5 4.5h11M2.5 11.5h11"/><path d="M6 2.8v3.4M10.5 9.8v3.4"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16">
+      <path d="M2 12.8V3.4h4.2L7.7 5.4H14v7.4z"/>
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16">
+      <rect x="5.5" y="2.5" width="8" height="8"/><path d="M10.5 13.5h-8v-8"/>
+    </symbol>
+    <symbol id="i-clear" viewBox="0 0 16 16">
+      <path d="M3 4.5h10M6.2 4.5V2.6h3.6v1.9"/><path d="M4.4 4.5l.7 8.9h5.8l.7-8.9"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16">
+      <path d="M13.2 7.2A5.3 5.3 0 0 0 3.6 5.1"/><path d="M2.8 8.8a5.3 5.3 0 0 0 9.6 2.1"/>
+      <path d="M3.4 2.2v2.9h2.9M12.6 13.8v-2.9H9.7"/>
+    </symbol>
+    <symbol id="i-link" viewBox="0 0 16 16">
+      <path d="M9.2 2.6H13.4V6.8"/><path d="M13.4 2.6L7.6 8.4"/>
+      <path d="M11.4 9.6v3.8H2.6V4.6h3.8"/>
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16">
+      <path d="M1.4 8S3.9 4 8 4s6.6 4 6.6 4-2.5 4-6.6 4S1.4 8 1.4 8z"/>
+      <circle cx="8" cy="8" r="1.7"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4.2" y="4.2" width="7.6" height="7.6"/></symbol>
+    <symbol id="i-beaker" viewBox="0 0 16 16">
+      <path d="M6.4 2.4v4L2.9 13h10.2L9.6 6.4v-4"/><path d="M5.4 2.4h5.2M4.7 9.6h6.6"/>
+    </symbol>
+    <symbol id="i-signal" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="1.9"/>
+      <path d="M4.6 4.6a4.8 4.8 0 0 0 0 6.8M11.4 4.6a4.8 4.8 0 0 1 0 6.8"/>
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6"/>
+      <path d="M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8C6.3 12.2 5.4 10.2 5.4 8S6.3 3.8 8 2.2z"/>
+    </symbol>
+    <symbol id="i-key" viewBox="0 0 16 16">
+      <circle cx="5" cy="8" r="2.6"/><path d="M7.6 8h6.4"/><path d="M11.6 8v2.4M13.4 8v2"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ===== Boot ============================================================ -->
+<div id="boot" class="boot">
+  <div class="spinner-ring"></div>
+  <p class="boot-text">Starting</p>
+</div>
+
+<!-- ===== Licence activation ============================================== -->
+<section id="view-licence" class="view centred hidden">
+  <div class="auth-card">
+    <div class="brand-badge">
+      <span class="brand-icon"><svg class="icon"><use href="#i-key"/></svg></span>
+      <span class="brand-name">Job Agent</span>
+    </div>
+    <h1>Enter your licence key</h1>
+    <p class="lede">The key unlocks job discovery, resume tailoring, and auto-apply on this machine.</p>
+
+    <div class="input-group">
+      <label for="licence-key">Licence key</label>
+      <input id="licence-key" type="text" placeholder="JAA-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false">
+    </div>
+
+    <p id="licence-error" class="error-banner hidden"></p>
+
+    <button id="licence-submit" class="btn btn-primary btn-lg">Activate</button>
+    <p class="hint" id="licence-storage-hint">Stored in this computer's keychain.</p>
+  </div>
+</section>
+
+<!-- ===== One-time browser install ======================================== -->
+<section id="view-browser" class="view centred hidden">
+  <div class="auth-card">
+    <div class="brand-badge">
+      <span class="brand-icon"><svg class="icon"><use href="#i-globe"/></svg></span>
+      <span class="brand-name">Browser runtime</span>
+    </div>
+    <h1>Install the browser runtime</h1>
+    <p class="lede">The agent drives an isolated Chromium build so it can fill application forms without tripping bot detection. It downloads once, about 150&nbsp;MB, and stays on this machine.</p>
+
+    <p id="browser-status" class="hint"></p>
+    <p id="browser-error" class="error-banner hidden"></p>
+
+    <button id="browser-start" class="btn btn-primary btn-lg">Download and install</button>
+  </div>
+</section>
+
+<!-- ===== Profile wizard ================================================== -->
+<section id="view-wizard" class="view hidden">
+  <div class="wizard-container">
+    <header class="wizard-header">
+      <div class="wizard-brand">
+        <span class="brand-dot"></span>
+        <span class="wizard-brand-text">Profile</span>
+      </div>
+      <h1 id="wizard-title">Set up your profile</h1>
+      <p class="lede" id="wizard-sub">The agent uses this to find roles, answer screening questions, and tailor your resume.</p>
+      <ol class="step-progress" id="wizard-steps"></ol>
+    </header>
+
+    <div class="wizard-card">
+      <!-- Step 0: who you are -->
+      <div class="step-panel" data-step="0">
+        <div class="form-grid two-col">
+          <div class="input-group">
+            <label for="f-first_name">First name</label>
+            <input id="f-first_name" type="text" placeholder="Priya">
+          </div>
+          <div class="input-group">
+            <label for="f-last_name">Last name</label>
+            <input id="f-last_name" type="text" placeholder="Sharma">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="f-email">Email</label>
+          <input id="f-email" type="email" placeholder="you@example.com">
+        </div>
+        <div class="form-grid phone-grid">
+          <div class="input-group">
+            <label for="f-phone_country_code">Code</label>
+            <input id="f-phone_country_code" type="text" value="+91">
+          </div>
+          <div class="input-group">
+            <label for="f-phone_number">Phone</label>
+            <input id="f-phone_number" type="tel" placeholder="9876543210">
+          </div>
+        </div>
+        <div class="form-grid three-col">
+          <div class="input-group">
+            <label for="f-city">City</label>
+            <input id="f-city" type="text" placeholder="Bengaluru">
+          </div>
+          <div class="input-group">
+            <label for="f-state">State</label>
+            <input id="f-state" type="text" placeholder="Karnataka">
+          </div>
+          <div class="input-group">
+            <label for="f-country">Country</label>
+            <input id="f-country" type="text" value="India">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="f-linkedin_url">LinkedIn URL <span class="optional">optional</span></label>
+          <input id="f-linkedin_url" type="url" placeholder="https://www.linkedin.com/in/your-profile">
+        </div>
+      </div>
+
+      <!-- Step 1: what to look for -->
+      <div class="step-panel hidden" data-step="1">
+        <div class="input-group">
+          <label>Job titles to search</label>
+          <div class="tag-box" id="tags-job_titles"></div>
+          <p class="field-hint">Press Enter or comma to add one. Use the exact titles you would type into LinkedIn's search box.</p>
+        </div>
+        <div class="input-group">
+          <label>Locations</label>
+          <div class="tag-box" id="tags-locations"></div>
+          <p class="field-hint">For example: Bengaluru, Remote, India.</p>
+        </div>
+        <div class="input-group">
+          <label for="f-min_match_score">Match threshold — <span id="score-value" class="highlight-score">75</span>%</label>
+          <input id="f-min_match_score" type="range" min="40" max="95" value="75" class="slider">
+          <p class="field-hint">The agent skips anything it scores below this and keeps it as a lead.</p>
+        </div>
+        <div class="input-group">
+          <label for="f-max_applications_per_day">Applications per day</label>
+          <input id="f-max_applications_per_day" type="number" min="1" max="60" value="25">
+          <p class="field-hint">A rate limit. Applying faster than this puts your account at risk.</p>
+        </div>
+      </div>
+
+      <!-- Step 2: your background -->
+      <div class="step-panel hidden" data-step="2">
+        <div class="form-grid two-col">
+          <div class="input-group">
+            <label for="f-total_years_experience">Years of experience</label>
+            <input id="f-total_years_experience" type="number" min="0" max="50" value="3">
+          </div>
+          <div class="input-group">
+            <label for="f-current_role">Current role</label>
+            <input id="f-current_role" type="text" placeholder="Your current job title">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="f-current_company">Current company</label>
+          <input id="f-current_company" type="text" placeholder="Your current employer">
+        </div>
+        <div class="input-group">
+          <label>Skills</label>
+          <div class="tag-box" id="tags-skills"></div>
+          <p class="field-hint">The tools, technologies and skills a recruiter would search for on your CV.</p>
+        </div>
+        <div class="input-group">
+          <label for="f-professional_summary">Summary <span class="optional">optional</span></label>
+          <textarea id="f-professional_summary" rows="4" placeholder="Two or three lines on what you do and what you are strongest at…"></textarea>
+        </div>
+      </div>
+
+      <!-- Step 3: screening answers -->
+      <div class="step-panel hidden" data-step="3">
+        <div class="alert-info">
+          <strong>Answered without asking you</strong>
+          <span>The agent submits these verbatim when a recruiter form asks. A wrong answer here is filtered out silently, so check each one.</span>
+        </div>
+        <div class="input-group">
+          <label for="f-work_country">Country you can work in</label>
+          <input id="f-work_country" type="text" value="India">
+        </div>
+        <label class="checkbox-label">
+          <input id="f-requires_sponsorship" type="checkbox">
+          <span>I need visa sponsorship</span>
+        </label>
+        <div class="form-grid two-col">
+          <div class="input-group">
+            <label for="f-notice_period_days">Notice period — days</label>
+            <input id="f-notice_period_days" type="number" min="0" max="180" value="15">
+          </div>
+          <div class="input-group">
+            <label for="f-expected_ctc_lakhs">Expected CTC — ₹ lakhs</label>
+            <input id="f-expected_ctc_lakhs" type="number" min="0" step="0.5" placeholder="28">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="f-minimum_ctc_lakhs">Lowest CTC you would accept — ₹ lakhs</label>
+          <input id="f-minimum_ctc_lakhs" type="number" min="0" step="0.5" placeholder="24">
+        </div>
+        <div class="form-grid two-col">
+          <label class="checkbox-label">
+            <input id="f-willing_to_relocate" type="checkbox" checked>
+            <span>I will relocate</span>
+          </label>
+          <label class="checkbox-label">
+            <input id="f-can_work_remotely" type="checkbox" checked>
+            <span>I will work remotely</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 4: master resume -->
+      <div class="step-panel hidden" data-step="4">
+        <div class="input-group">
+          <label>Master resume — PDF</label>
+          <div class="file-uploader">
+            <button id="pick-resume" class="btn btn-secondary" type="button">Choose PDF…</button>
+            <span id="resume-name" class="file-chosen-name">No file chosen</span>
+          </div>
+          <p class="field-hint">Every tailored version is measured against this one and has to stay within 10% of it.</p>
+        </div>
+        <p id="wizard-error" class="error-banner hidden"></p>
+      </div>
+
+      <footer class="wizard-footer">
+        <button id="wizard-back" class="btn btn-ghost">Back</button>
+        <button id="wizard-next" class="btn btn-primary">Continue</button>
+      </footer>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Main application ================================================ -->
+<div id="view-dashboard" class="view app-layout hidden">
+
+  <aside class="app-sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo-glow"><svg class="icon"><use href="#i-mark"/></svg></div>
+      <div class="brand-meta">
+        <span class="app-title">Job Agent</span>
+        <span class="app-version">Autonomous</span>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <button class="nav-item active" data-tab="dashboard">
+        <svg class="icon"><use href="#i-wave"/></svg>
+        <span class="nav-label">Run deck</span>
+      </button>
+      <button class="nav-item" data-tab="applications">
+        <svg class="icon"><use href="#i-table"/></svg>
+        <span class="nav-label">Jobs</span>
+        <span id="badge-applied-count" class="nav-badge">0</span>
+      </button>
+      <button class="nav-item" data-tab="settings">
+        <svg class="icon"><use href="#i-sliders"/></svg>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-status">
+      <div class="status-indicator">
+        <span id="sidebar-pulse" class="pulse-dot idle"></span>
+        <span id="sidebar-run-text" class="status-text">Idle</span>
+      </div>
+      <div id="dash-licence-badge" class="licence-badge">Licensed</div>
+    </div>
+  </aside>
+
+  <main class="app-main">
+
+    <header class="main-header">
+      <div>
+        <h1 id="dash-greeting" class="view-title">Run deck</h1>
+        <p id="dash-subtext" class="view-subtitle">Search, score, tailor, apply. You decide when it submits.</p>
+      </div>
+      <div class="header-actions">
+        <button id="btn-open-folder" class="btn btn-ghost btn-sm">
+          <svg class="icon icon-sm"><use href="#i-folder"/></svg><span>Files</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- TAB 1: run deck -->
+    <div id="tab-dashboard" class="tab-content active">
+
+      <div class="stats-grid" id="stats-ribbon">
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-value" id="kpi-jobs-found">0</span>
+            <span class="stat-label">Discovered</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-value" id="kpi-matches">0</span>
+            <span class="stat-label">Matched</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-value" id="kpi-applied-today">0</span>
+            <span class="stat-label">Submitted</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-meta">
+            <span class="stat-value" id="kpi-outreach">0</span>
+            <span class="stat-label">Outreach</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deck-card">
+        <div class="deck-header">
+          <div class="deck-title-group">
+            <h2 class="deck-title">Run control</h2>
+            <p class="deck-subtitle">Dry run stops before Submit. Live mode sends applications under your name.</p>
+          </div>
+
+          <div class="mode-segmented">
+            <button id="mode-btn-dry" class="mode-btn active" type="button">Dry run</button>
+            <button id="mode-btn-live" class="mode-btn" type="button">Live</button>
+          </div>
+        </div>
+
+        <div id="mode-banner" class="mode-info-banner dry">
+          <span class="mode-banner-icon"><svg class="icon"><use href="#i-beaker"/></svg></span>
+          <div class="mode-banner-text">
+            <strong>Dry run</strong>
+            <span>The agent searches, scores, tailors a resume, and fills the form, then stops before Submit.</span>
+          </div>
+        </div>
+
+        <div class="deck-controls">
+          <div class="platform-triggers">
+            <button class="btn btn-primary btn-run" data-platform="linkedin" id="btn-run-linkedin">
+              <span class="btn-text">Run LinkedIn</span>
+            </button>
+            <button class="btn btn-primary btn-run" data-platform="naukri" id="btn-run-naukri">
+              <span class="btn-text">Run Naukri</span>
+            </button>
+            <button id="stop-run" class="btn btn-danger hidden">
+              <svg class="icon icon-sm"><use href="#i-stop"/></svg><span>Stop</span>
+            </button>
+          </div>
+
+          <div class="run-status-pill" id="run-status-pill">
+            <span class="pulse-dot idle" id="deck-pulse"></span>
+            <span id="deck-status-text">Idle</span>
+          </div>
+        </div>
+
+        <div class="auto-run-row">
+          <label class="auto-run-toggle">
+            <input type="checkbox" id="chk-auto-run">
+            <span>Keep running automatically</span>
+          </label>
+          <label class="auto-run-interval">
+            <span>every</span>
+            <select id="sel-auto-interval">
+              <option value="30">30 min</option>
+              <option value="60" selected>1 hour</option>
+              <option value="120">2 hours</option>
+              <option value="180">3 hours</option>
+            </select>
+          </label>
+          <span class="auto-run-note" id="auto-run-note">
+            Starts a run on that schedule using the mode and platform selected above. The
+            agent still keeps to its own active hours, breaks and daily limit.
+          </span>
+        </div>
+      </div>
+
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <div class="terminal-title">
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot"></span>
+            <span class="terminal-dot green"></span>
+            <span class="terminal-heading">Stream</span>
+          </div>
+          <div class="terminal-actions">
+            <button id="btn-copy-logs" class="btn btn-ghost btn-xs" title="Copy the stream">
+              <svg class="icon icon-sm"><use href="#i-copy"/></svg><span>Copy</span>
+            </button>
+            <button id="btn-clear-logs" class="btn btn-ghost btn-xs" title="Clear the stream">
+              <svg class="icon icon-sm"><use href="#i-clear"/></svg><span>Clear</span>
+            </button>
+            <label class="autoscroll-toggle">
+              <input type="checkbox" id="chk-autoscroll" checked>
+              <span>Follow</span>
+            </label>
+          </div>
+        </div>
+        <pre id="log" class="terminal-body">Idle. Start a run to search, score, and apply.</pre>
+      </div>
+    </div>
+
+    <!-- TAB 2: jobs -->
+    <div id="tab-applications" class="tab-content hidden">
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-filters">
+            <input id="input-search-apps" type="text" placeholder="Search jobs" class="filter-input">
+            <select id="select-filter-status" class="filter-select">
+              <option value="all">All</option>
+              <option value="applied">Applied</option>
+              <option value="evaluated_match">Matched</option>
+              <option value="evaluated_reject">Rejected</option>
+              <option value="skipped">Skipped</option>
+              <option value="failed">Needs review</option>
+              <option value="discovered">Not yet scored</option>
+            </select>
+            <button id="btn-refresh-apps" class="btn btn-sm">
+              <svg class="icon icon-sm"><use href="#i-refresh"/></svg><span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="apps-table">
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>Resume</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="apps-table-body">
+              <tr><td colspan="7" class="empty-state">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: settings -->
+    <div id="tab-settings" class="tab-content hidden">
+      <div class="card-box">
+        <div class="settings-meta">
+          <h3>Base resume</h3>
+          <p class="hint">Every tailored version is measured against this file and has to stay
+             within 10% of it. Replacing it re-bases every resume generated from here on.</p>
+          <div class="file-uploader">
+            <button id="settings-pick-resume" class="btn btn-secondary" type="button">Choose PDF…</button>
+            <span id="settings-resume-name" class="file-chosen-name">No file chosen</span>
+          </div>
+          <p id="settings-resume-msg" class="hint hidden"></p>
+        </div>
+
+        <div class="settings-actions">
+          <button id="edit-profile" class="btn btn-primary">Edit profile</button>
+          <button id="sign-out" class="btn btn-danger">Remove licence</button>
+        </div>
+
+        <div class="settings-meta">
+          <h3>Pacing &amp; limits</h3>
+          <p class="hint">How often and how much the agent applies. Running at unusual hours,
+             every day, at high volume is the clearest automation signal there is &mdash; these
+             exist to blunt that. Widen them if you want, but your account is what is at stake.</p>
+
+          <div class="pacing-grid">
+            <label class="pacing-field">
+              <span>Active from (hour)</span>
+              <input type="number" id="pace-hours-start" min="0" max="24" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Active until (hour)</span>
+              <input type="number" id="pace-hours-end" min="0" max="24" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Applications per day</span>
+              <input type="number" id="pace-apply-cap" min="1" max="1000" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Minimum match score</span>
+              <input type="number" id="pace-min-score" min="0" max="100" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Session length min (mins)</span>
+              <input type="number" id="pace-session-min" min="5" max="600" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Session length max (mins)</span>
+              <input type="number" id="pace-session-max" min="5" max="600" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Rest-day chance (0&ndash;1)</span>
+              <input type="number" id="pace-rest-day" min="0" max="1" step="0.05">
+            </label>
+            <label class="pacing-field">
+              <span>Pre-filter floor (0&ndash;100)</span>
+              <input type="number" id="pace-prefilter" min="0" max="100" step="1">
+            </label>
+            <label class="pacing-field">
+              <span>Non&ndash;Easy&nbsp;Apply jobs</span>
+              <select id="pace-external">
+                <option value="apply">Apply to them too</option>
+                <option value="discover">Find, but do not apply</option>
+                <option value="off">Ignore them</option>
+              </select>
+            </label>
+            <label class="pacing-field pacing-toggle">
+              <span>Human pacing</span>
+              <select id="pace-enabled">
+                <option value="true">On &mdash; breaks, jitter, hour limits</option>
+                <option value="false">Off &mdash; no pacing at all</option>
+              </select>
+            </label>
+          </div>
+
+          <p class="hint">Set the hours to <strong>0</strong> and <strong>24</strong> to run at
+             any time. They cannot be equal &mdash; that would block every hour.</p>
+          <div class="settings-actions">
+            <button id="pace-save" class="btn btn-primary" type="button">Save pacing</button>
+            <button id="pace-reimport-cv" class="btn btn-secondary" type="button">Re-import CV</button>
+          </div>
+          <p id="pace-msg" class="hint hidden"></p>
+        </div>
+
+        <div class="settings-meta">
+          <h3>Files</h3>
+          <p class="hint" id="settings-paths">Loading…</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== Resume inspection =============================================== -->
+<dialog id="modal-resume-inspect" class="modal-dialog">
+  <div class="modal-container">
+    <header class="modal-header">
+      <div class="modal-title-group">
+        <span class="modal-badge" id="modal-badge-type">Tailored and audited</span>
+        <h2 id="modal-resume-title">Resume</h2>
+        <p id="modal-resume-company" class="modal-subtitle">Company</p>
+      </div>
+      <button id="btn-close-modal" class="modal-close-btn" type="button" aria-label="Close">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="modal-kpi-bar" id="modal-kpi-bar">
+        <div class="modal-kpi">
+          <span class="kpi-lbl">Fidelity</span>
+          <span class="kpi-val green" id="modal-fidelity">94.0%</span>
+        </div>
+        <div class="modal-kpi">
+          <span class="kpi-lbl">Deviation</span>
+          <span class="kpi-val cyan" id="modal-deviation">6.0%</span>
+        </div>
+        <div class="modal-kpi">
+          <span class="kpi-lbl">±10% limit</span>
+          <span class="kpi-val green" id="modal-constraint">Pass</span>
+        </div>
+        <div class="modal-kpi">
+          <span class="kpi-lbl">Auditor</span>
+          <span class="kpi-val green" id="modal-verdict">Approved</span>
+        </div>
+      </div>
+
+      <!-- The signature: deviation as a position on a scale, with the
+           in-tolerance band drawn and the limit ticked. -->
+      <div class="modal-section">
+        <h3>Deviation from your master resume</h3>
+        <div class="tol" id="modal-tolerance">
+          <div class="tol-scale">
+            <div class="tol-band"></div>
+            <div class="tol-ticks"></div>
+            <div class="tol-limit"></div>
+            <div class="tol-needle"></div>
+          </div>
+          <div class="tol-axis">
+            <span>0%</span>
+            <span class="tol-mark">10.0% limit</span>
+            <span>20%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section" id="modal-section-auditor">
+        <h3>Auditor findings</h3>
+        <p class="modal-text-box" id="modal-findings">Auditor findings</p>
+      </div>
+
+      <div class="modal-section">
+        <h3>Summary</h3>
+        <p class="modal-text-box" id="modal-summary">Summary</p>
+      </div>
+
+      <div class="modal-section">
+        <h3>Experience highlights</h3>
+        <ul class="modal-bullet-list" id="modal-bullets"></ul>
+      </div>
+
+      <div class="modal-section">
+        <h3>Backup location</h3>
+        <p class="modal-text-box code-style" id="modal-gcs-path">gs://your-bucket-name/resumes/candidates/…</p>
+      </div>
+    </div>
+
+    <footer class="modal-footer">
+      <button id="modal-btn-close" class="btn btn-ghost">Close</button>
+      <button id="modal-btn-open-pdf" class="btn btn-primary">
+        <svg class="icon icon-sm"><use href="#i-doc"/></svg><span>Open PDF</span>
+      </button>
+    </footer>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

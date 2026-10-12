@@ -1,0 +1,54 @@
+<!doctype html><html><body>
+<!--
+  The false-positive case, and the one that matters most.
+
+  Everything here is form-shaped: a search box, a newsletter signup that asks
+  for a name and an email, a contact form with a message field, and a login. A
+  scorer that counts inputs would fill all four. Typing a candidate's phone
+  number into a marketing list is the cheapest possible way to do real harm, so
+  `find_application_form` has to return nothing at all on this page.
+
+  Note the login form in particular: it has a password field, which is what
+  separates "create an account to apply" from an application.
+-->
+<header>
+  <form role="search">
+    <input type="text" name="q" placeholder="Search">
+    <button type="submit">Search</button>
+  </form>
+</header>
+
+<main>
+  <h1>Acme Blog</h1>
+
+  <form id="newsletter">
+    <h2>Subscribe to our newsletter</h2>
+    <label for="nl_name">Your name</label>
+    <input type="text" id="nl_name" name="name">
+    <label for="nl_email">Email</label>
+    <input type="email" id="nl_email" name="email">
+    <label><input type="checkbox" name="consent"> Send me marketing emails</label>
+    <button type="submit">Subscribe</button>
+  </form>
+
+  <form id="contact">
+    <h2>Contact us</h2>
+    <label for="c_name">Name</label>
+    <input type="text" id="c_name" name="name">
+    <label for="c_email">Email</label>
+    <input type="email" id="c_email" name="email">
+    <label for="c_msg">Message</label>
+    <textarea id="c_msg" name="message"></textarea>
+    <button type="submit">Send</button>
+  </form>
+
+  <form id="login">
+    <h2>Sign in to apply</h2>
+    <label for="l_email">Email</label>
+    <input type="email" id="l_email" name="email">
+    <label for="l_pass">Password</label>
+    <input type="password" id="l_pass" name="password">
+    <button type="submit">Sign in</button>
+  </form>
+</main>
+</body></html>
