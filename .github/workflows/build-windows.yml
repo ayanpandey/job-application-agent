@@ -1,0 +1,136 @@
+name: Build Windows app
+
+# Nuitka compiles, it does not cross-compile, so a Windows .exe has to be built
+# on Windows. This runner is the substitute for owning a Windows machine.
+#
+# The API endpoint is passed in as a repository variable rather than committed,
+# so the same source can build against staging or production.
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: "Which agent directory to build"
+        required: true
+        # Both directories now produce a byte-identical shipped surface -- the
+        # UI, the bundled config, the CLI and the compiled sources are the same
+        # files. The default names the one the macOS build also uses, so a
+        # Windows and a macOS release of the same version are the same product.
+        default: job-agent
+        type: choice
+        options: [job-agent]
+      version:
+        description: "Version string baked into the build"
+        required: false
+        default: "1.0.0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    # Nuitka emits ~2,700 C translation units for this app. A 10-core M1 gets
+    # through them in about 21 minutes; a free-plan runner has 2 cores, so the
+    # honest budget is 90-180 minutes. 60 would have timed out after burning
+    # every minute of it.
+    #
+    # Windows minutes bill at 2x against the 2,000/month free allowance, so a
+    # cold build costs 200-360 of them. The ccache step below is what keeps
+    # that a once-per-release cost rather than a per-push one.
+    timeout-minutes: 300
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ inputs.agent }}/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.agent }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka
+
+      # Nuitka drives clang through ccache and keeps both under LOCALAPPDATA.
+      # Without this every run recompiles all ~2,700 translation units from
+      # cold, which is the difference between a release costing ~30 billed
+      # minutes and costing ~300 of the 2,000 free ones. The key is scoped to
+      # the agent and the lockfile, and restore-keys let a run whose
+      # dependencies changed still start from the previous cache rather than
+      # from nothing.
+      # Split restore/save deliberately. `actions/cache` declares
+      # `post-if: success()`, so its save step is skipped whenever the job
+      # fails or is cancelled -- which is precisely when a warm cache is worth
+      # most. Two runs died at 84 and 37 minutes and each threw away every
+      # compiled object, so the next attempt started from cold again.
+      # `cache/save` with `if: always()` keeps the work.
+      - name: Restore Nuitka compilation cache
+        id: nuitka-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-${{ inputs.agent }}-${{ hashFiles(format('{0}/requirements.txt', inputs.agent)) }}-${{ github.sha }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-${{ inputs.agent }}-${{ hashFiles(format('{0}/requirements.txt', inputs.agent)) }}-
+            nuitka-${{ runner.os }}-${{ inputs.agent }}-
+
+      # The build refuses to run if a credential is present in the tree. On a
+      # clean checkout there should be none -- this guarantees that stays true
+      # even if someone commits one by accident.
+      - name: Verify no credentials in the checkout
+        working-directory: ${{ inputs.agent }}
+        shell: bash
+        run: |
+          for f in config/service_account.json .env config/profile.yaml config/prompts.yaml; do
+            if [ -f "$f" ]; then
+              echo "::error::$f is committed to the repository and must be removed."
+              exit 1
+            fi
+          done
+          echo "No credentials in the checkout."
+
+      - name: Build
+        working-directory: ${{ inputs.agent }}
+        env:
+          JOB_AGENT_API_URL: ${{ vars.JOB_AGENT_API_URL }}
+          JOB_AGENT_VERSION: ${{ inputs.version }}
+        run: python build.py
+
+      # Immediately after the build, before anything can fail, and regardless
+      # of whether it did. Saving compiled objects from a failed run is the
+      # whole point: the next attempt then only compiles what changed.
+      - name: Save Nuitka compilation cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-${{ inputs.agent }}-${{ hashFiles(format('{0}/requirements.txt', inputs.agent)) }}-${{ github.sha }}
+
+      - name: Package
+        working-directory: ${{ inputs.agent }}
+        shell: pwsh
+        run: |
+          # Name the directory, do not take the first one. Nuitka leaves both
+          # `gui.build` (a gigabyte of C intermediates) and `gui.dist` (the
+          # actual app) in dist/, and `Select-Object -First 1` returns them
+          # alphabetically -- so this would have zipped the build scratch
+          # directory and shipped it as the product, with no error anywhere.
+          $out = Get-ChildItem dist -Directory -Filter '*.dist'
+          if ($out.Count -ne 1) {
+            Write-Error "Expected exactly one *.dist directory in dist/, found $($out.Count): $($out.Name -join ', ')"
+            exit 1
+          }
+          if (-not (Test-Path "$($out.FullName)\JobAgent.exe")) {
+            Write-Error "JobAgent.exe is missing from $($out.Name) -- refusing to package."
+            exit 1
+          }
+          Compress-Archive -Path "$($out.FullName)\*" -DestinationPath "dist\JobAgent-windows.zip"
+          Write-Host "Packaged $($out.Name) ($([math]::Round((Get-Item "dist\JobAgent-windows.zip").Length / 1MB)) MB)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JobAgent-windows-${{ inputs.version }}
+          path: ${{ inputs.agent }}/dist/JobAgent-windows.zip
+          retention-days: 14

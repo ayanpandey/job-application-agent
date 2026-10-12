@@ -1,0 +1,361 @@
+name: Diagnose Windows app
+
+# Why this exists
+#
+# `build.py` passes --windows-console-mode=disable, so JobAgent.exe is linked
+# as a GUI-subsystem binary (PE subsystem 2). Windows gives such a process no
+# console, so an uncaught Python exception during startup prints a traceback to
+# a stderr that goes nowhere: the process starts, dies, and the customer sees
+# *nothing happen*. That is not a rare corner -- it is how every startup bug in
+# this app will present.
+#
+# This job is the substitute for a Windows machine. It takes an already-built
+# artifact (no 90-minute recompile), launches it with stdout and stderr
+# redirected to real files -- which a GUI-subsystem process does inherit, and
+# which is the only way to read a traceback out of one -- and prints whatever
+# the app was trying to say.
+#
+# It also runs the same import in plain CPython on the same runner. That
+# control matters: if the frozen app fails where the source does not, the fault
+# is in what Nuitka packaged, and if both fail, the fault is in the app or the
+# machine. Deciding that from a single failing sample is guesswork.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID of the 'Build Windows app' run whose artifact to test"
+        required: true
+        type: string
+      artifact:
+        description: "Artifact name in that run"
+        required: false
+        default: "JobAgent-windows-1.0.0"
+        type: string
+      agent:
+        description: "Agent directory (for the source-mode control)"
+        required: false
+        default: job-agent
+        type: choice
+        options: [job-agent]
+      simulate_download:
+        description: "Tag the unpacked files with the Mark of the Web, as a real download would be"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read          # required to read an artifact from another run
+
+jobs:
+  frozen:
+    name: Launch the shipped binary
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the built artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: artifact
+
+      - name: Unpack
+        shell: pwsh
+        run: |
+          Expand-Archive -Path artifact\JobAgent-windows.zip -DestinationPath app -Force
+          if (-not (Test-Path app\JobAgent.exe)) {
+            Write-Error "JobAgent.exe is not in the artifact"; exit 1
+          }
+          "Unpacked $((Get-ChildItem app -Recurse -File | Measure-Object).Count) files."
+
+      # What the app carries, at the paths the failing code actually consults.
+      # webview\lib\runtimes is called out by name because
+      # webview\platforms\edgechromium.py loops over win-arm64, win-x64 and
+      # win-x86 at *module import time* and calls interop_dll_path() on each,
+      # which raises FileNotFoundError -- not ImportError -- for any that is
+      # absent. guilib.import_winforms() only catches ImportError, so that
+      # escapes webview.start() and kills the process before a window exists.
+      # Nuitka's anti-bloat plugin is supposed to rewrite that loop; this shows
+      # whether the directories are there regardless.
+      - name: Inventory the bundle
+        shell: pwsh
+        run: |
+          "== top-level DLLs =="
+          Get-ChildItem app\*.dll | Select-Object -ExpandProperty Name
+          "`n== webview\lib =="
+          Get-ChildItem app\webview\lib -Recurse -File | ForEach-Object {
+            $_.FullName.Replace((Resolve-Path app).Path + '\', '')
+          }
+          "`n== pythonnet / clr_loader =="
+          Get-ChildItem app\pythonnet, app\clr_loader -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName.Replace((Resolve-Path app).Path + '\', '') }
+
+      # Without this the runner is not a customer machine, and this job would
+      # have certified the very build that failed on one.
+      #
+      # A file downloaded from the internet gets a `Zone.Identifier` alternate
+      # data stream, and Explorer's "Extract All" copies it onto everything it
+      # unpacks. The .NET Framework then refuses to load a *managed* assembly
+      # carrying it, which kills `pythonnet/runtime/Python.Runtime.dll` and so
+      # the entire pywebview Windows backend. CI downloads its artifact through
+      # the Actions API, which applies no such tag, so the frozen app launched
+      # perfectly here while doing nothing at all on the machine of the person
+      # who bought it.
+      #
+      # Writing the stream ourselves reproduces the customer's filesystem
+      # exactly. Native DLLs and Python files are not gated this way, so only
+      # the managed assemblies actually change behaviour -- but tagging
+      # everything is what a real download does, and the point is fidelity.
+      - name: Mark the unpacked files as downloaded
+        if: ${{ inputs.simulate_download }}
+        shell: pwsh
+        run: |
+          $n = 0
+          Get-ChildItem app -Recurse -File | ForEach-Object {
+            try {
+              Set-Content -Path "$($_.FullName):Zone.Identifier" `
+                          -Value "[ZoneTransfer]`r`nZoneId=3" -ErrorAction Stop
+              $n++
+            } catch { }
+          }
+          "Tagged $n files with ZoneId=3 (Internet zone)."
+          "Python.Runtime.dll streams:"
+          Get-Item app\pythonnet\runtime\Python.Runtime.dll -Stream * |
+            Select-Object -ExpandProperty Stream
+
+      - name: Probe the machine
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          "== WebView2 Evergreen runtime =="
+          $guid = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          foreach ($root in 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients',
+                            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients',
+                            'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients') {
+            $k = Join-Path $root $guid
+            if (Test-Path $k) { "$k -> $((Get-ItemProperty $k).pv)" }
+          }
+          "`n== .NET Framework =="
+          (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue).Version
+          "`n== OS =="
+          (Get-CimInstance Win32_OperatingSystem).Caption
+          [Environment]::OSVersion.VersionString
+
+      # The first thing a customer does after entering their key, and until now
+      # never tested anywhere. Run through the frozen binary rather than pip so
+      # the browser revision matches the driver the build actually bundles --
+      # a pip-installed Playwright could fetch a different one and the mismatch
+      # would look like a broken build rather than a broken test.
+      #
+      # Not a gate: a download can fail for reasons that are nothing to do with
+      # the build. It just means the browser-dependent checks below downgrade to
+      # SKIPPED, which the self-test reports honestly.
+      - name: Fetch Chromium, as onboarding does
+        shell: pwsh
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          $exe = (Resolve-Path app\JobAgent.exe).Path
+          $p = Start-Process -FilePath $exe -ArgumentList '--install-browser' `
+                 -WorkingDirectory (Resolve-Path app).Path -WindowStyle Hidden `
+                 -PassThru -RedirectStandardOutput browser.txt -RedirectStandardError browser-err.txt
+          if (-not $p.WaitForExit(840000)) { $p.Kill(); Write-Warning "browser download timed out" }
+          if (Test-Path browser.txt) { Get-Content browser.txt }
+          if (Test-Path browser-err.txt) { Get-Content browser-err.txt }
+          "exit: $($p.ExitCode)"
+
+      # Pressing Start in the UI spawns a child process, and on Windows that is
+      # its own failure mode. Two separate bugs lived here, stacked: subprocess
+      # obliges you to supply all three std handles once you redirect any, and
+      # the stdin it falls back to does not exist in a process with no console
+      # ("[WinError 6] The handle is invalid"); underneath that, `sys.executable`
+      # in a Nuitka build names a python.exe that is never produced
+      # ("[WinError 2]"). Fixing the first is what revealed the second.
+      #
+      # The child then checks what a run actually depends on: non-ASCII across
+      # the pipe in both directions (a box-drawing rule in the first line the
+      # run prints once killed it with UnicodeEncodeError), the bundled
+      # Playwright driver, and -- when a browser has been fetched -- launching
+      # Chromium and rendering a PDF, which is how every customer resume is
+      # really produced since no customer machine has LaTeX.
+      #
+      # Unlike the launch step below, this is a gate: a build that cannot start
+      # a run is not shippable, and saying so here is the whole point of having
+      # a Windows runner. It has already rejected one build that was otherwise
+      # ready to publish.
+      #
+      # -WindowStyle Hidden plus redirection removes the console the runner
+      # would otherwise give the step, matching a customer's double-click.
+      - name: Can it start a run? (spawn self-test)
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path app\JobAgent.exe).Path
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' `
+                 -WorkingDirectory (Resolve-Path app).Path -WindowStyle Hidden `
+                 -PassThru -RedirectStandardOutput selftest.txt -RedirectStandardError selftest-err.txt
+          # Dump what it managed to say BEFORE deciding anything. The first
+          # version bailed on timeout without printing, which meant a hang --
+          # the failure that most needs explaining -- produced no evidence at
+          # all, only the word "hung".
+          $finished = $p.WaitForExit(300000)
+
+          "===== self-test stdout ====="
+          if (Test-Path selftest.txt) { Get-Content selftest.txt }
+          "===== self-test stderr ====="
+          if (Test-Path selftest-err.txt) { Get-Content selftest-err.txt }
+          "===== end ====="
+
+          if (-not $finished) {
+            "Still running after 300s. Surviving processes:"
+            Get-Process -Name JobAgent, node, chrome -ErrorAction SilentlyContinue |
+              Select-Object Id, Name, StartTime | Format-Table | Out-String
+            $p.Kill()
+            Get-Process -Name JobAgent, node, chrome -ErrorAction SilentlyContinue |
+              Stop-Process -Force -ErrorAction SilentlyContinue
+            Write-Error "self-test hung -- see output above for how far it got."
+            exit 1
+          }
+
+          if ($p.ExitCode -ne 0) {
+            Write-Error "The app cannot spawn a run child (exit $($p.ExitCode)). Do not ship this build."
+            exit 1
+          }
+          "Spawn self-test passed."
+
+      # The actual test. A GUI-subsystem process inherits redirected std
+      # handles, so Python's sys.stderr becomes a real file and the traceback
+      # lands somewhere readable. Without the redirect there is nowhere for it
+      # to go, which is the whole reason the failure looks like silence.
+      - name: Launch it and capture stderr
+        id: launch
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path app\JobAgent.exe).Path
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path app).Path `
+                 -PassThru -RedirectStandardOutput stdout.txt -RedirectStandardError stderr.txt
+
+          # 90s is far longer than startup needs; it only matters for the
+          # success case, where the app is supposed to still be alive.
+          $alive = -not $p.WaitForExit(90000)
+
+          "`n===== stdout ====="
+          if (Test-Path stdout.txt) { Get-Content stdout.txt }
+          "`n===== stderr ====="
+          if (Test-Path stderr.txt) { Get-Content stderr.txt }
+          "`n===== outcome ====="
+
+          if ($alive) {
+            "The app was still running after 90s -- a window was created. It does NOT crash on this runner."
+            $p.Kill()
+            "still-running" | Out-File -FilePath outcome.txt
+          } else {
+            "The app exited on its own after $([math]::Round($p.TotalProcessorTime.TotalSeconds,1))s CPU, exit code $($p.ExitCode)."
+            "This is the reported failure: it starts, dies, and shows nothing."
+            "exited:$($p.ExitCode)" | Out-File -FilePath outcome.txt
+            # Not a workflow failure -- reproducing the bug is the point.
+          }
+
+      # A crash that never reaches Python -- a missing DLL, an access violation
+      # inside the .NET host -- leaves nothing in stderr but does leave a
+      # Windows Error Reporting record.
+      - name: Application error log
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-10)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting|\.NET Runtime' } |
+            Select-Object TimeCreated, ProviderName, Message | Format-List
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-diagnosis
+          path: |
+            stdout.txt
+            stderr.txt
+            outcome.txt
+          if-no-files-found: warn
+
+  source:
+    name: Control - same startup, unfrozen
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    # Runs regardless of what the frozen job did. Its value is the comparison:
+    # a backend that imports here and not there indicts the packaging; one that
+    # fails in both indicts the code or the platform.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ inputs.agent }}/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.agent }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Written to a file rather than passed to `python -c`. A PowerShell
+      # here-string has to be terminated by "@ at the start of a line, and a
+      # YAML block scalar indents every line it contains -- so the inline form
+      # fails to parse in a way that looks like a Python error.
+      - name: Write the import probe
+        working-directory: ${{ inputs.agent }}
+        shell: bash
+        run: |
+          cat > probe_webview.py <<'PY'
+          import sys, traceback
+
+          print("python", sys.version)
+          for name in ("clr", "pythonnet", "clr_loader", "webview",
+                       "webview.platforms.edgechromium",
+                       "webview.platforms.winforms"):
+              try:
+                  __import__(name)
+                  print(f"  OK    {name}")
+              except BaseException as exc:
+                  print(f"  FAIL  {name}: {type(exc).__name__}: {exc}")
+                  traceback.print_exc()
+
+          # The real selection path. import_winforms() catches only ImportError,
+          # so anything else raised while importing the backend escapes here --
+          # which is precisely how a startup crash becomes invisible.
+          import webview.guilib as g
+          try:
+              g.initialize()
+              print("guilib.initialize() ->", g.guilib.__name__)
+          except BaseException as exc:
+              print("guilib.initialize() FAILED:", type(exc).__name__, exc)
+              traceback.print_exc()
+          PY
+
+      - name: Import the Windows webview backend
+        working-directory: ${{ inputs.agent }}
+        continue-on-error: true
+        run: python probe_webview.py
+
+      # The same entry point the .exe runs, from source. If this opens a window
+      # and the frozen build does not, the difference is entirely packaging.
+      - name: Start the real entry point from source
+        working-directory: ${{ inputs.agent }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $p = Start-Process -FilePath python -ArgumentList 'app\gui.py' -PassThru `
+                 -RedirectStandardOutput src-stdout.txt -RedirectStandardError src-stderr.txt
+          $alive = -not $p.WaitForExit(60000)
+          "`n===== stdout ====="; if (Test-Path src-stdout.txt) { Get-Content src-stdout.txt }
+          "`n===== stderr ====="; if (Test-Path src-stderr.txt) { Get-Content src-stderr.txt }
+          if ($alive) { "Source build still running after 60s -- window created."; $p.Kill() }
+          else { "Source build exited, code $($p.ExitCode)." }
